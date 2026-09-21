@@ -12,19 +12,23 @@
                                                         └─▶  يجلب CSV ويحلّله ويعرضه
 ```
 - الشيت هو مصدر الحقيقة الوحيد: عدّل الشيت ثم أعِد تحميل الصفحة لتظهر البيانات المحدثة.
-- رابط الشيت يُحقَن في الـContainer وقت التشغيل من متغيّر البيئة `SHEET_CSV_PROJECTS`، لذلك يمكن
+- روابط الشيت تُحقَن في الـContainer وقت التشغيل من متغيّري البيئة `SHEET_CSV_PROJECTS` و`SHEET_CSV_MILESTONES`، لذلك يمكن
   تغيير الشيت **دون إعادة بناء الصورة**.
 - لا يوجد تخزين مؤقت داخل التطبيق؛ كل تحميل يجلب البيانات من جديد (Google يخزّن CSV مؤقتًا ~دقيقة إلى دقيقتين).
 
 ## إعداد Google Sheet (مرة واحدة)
-1. أبقِ البيانات في التبويب الأول (`gid=0`) مع صف عناوين مطابق تمامًا:
-   `Project Name`, `Project Impact`, `Start Date`, `End Date`, `Project Owner`, `Department`.
+1. أبقِ بيانات المشاريع في تبويب **`Master Portfolio`** (`gid=1001`) مع صف عناوين مطابق تمامًا
+   (١٢ عمودًا): `Project ID`, `Project Name`, `IT Department`, `Strategic Domain`, `Priority`,
+   `Status`, `RAG Health`, `Decision Required`, `Start Date`, `End Date`, `Owner`, `Notes`.
+   والمعالم في تبويب **`Milestones`** (`gid=1002`): `Project ID`, `Project Name`,
+   `IT Department`, `Milestone Name`, `Due Date`, `Status`.
+   ملاحظة: التبويب `gid=0` أصبح لوحة معلومات داخل الشيت نفسه وليس مصدر بيانات.
 2. شارك الشيت للقراءة فقط: `Share → General access → Anyone with the link → Viewer`.
 3. رابط الـCSV يكون بالشكل:
    ```
-   https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=0
+   https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=<TAB_GID>
    ```
-   ضع هذا الرابط في `docker-compose.yml` داخل `SHEET_CSV_PROJECTS`.
+   ضع رابط المشاريع في `SHEET_CSV_PROJECTS` ورابط المعالم في `SHEET_CSV_MILESTONES` داخل `docker-compose.yml`.
 > صيغ التواريخ المقبولة: `YYYY-MM-DD` أو `10-Sep-2026` أو `M/D/YYYY`. حالة المشروع
 > (قادم / جارٍ / مكتمل) تُحسب تلقائيًا من تاريخي البداية والنهاية.
 
@@ -46,7 +50,7 @@
 # الطريقة الأولى: Docker (الموصى بها)
 
 1. انسخ المشروع إلى مجلد على السيرفر.
-2. عدّل `docker-compose.yml` وضع رابط الشيت في `SHEET_CSV_PROJECTS` (واختياريًا `REFRESH_SECONDS`).
+2. عدّل `docker-compose.yml` وضع روابط الشيت في `SHEET_CSV_PROJECTS` و`SHEET_CSV_MILESTONES` (واختياريًا `REFRESH_SECONDS`).
 3. ابنِ وشغّل:
 
 ```bash
@@ -63,7 +67,7 @@ http://SERVER-IP:8080
    Proxy، ثم فعّل HTTPS بشهادة الشركة.
 
 ## تغيير الشيت أو مدة التحديث (بدون إعادة بناء)
-عدّل `SHEET_CSV_PROJECTS` أو `REFRESH_SECONDS` في `docker-compose.yml` ثم:
+عدّل `SHEET_CSV_PROJECTS` أو `SHEET_CSV_MILESTONES` أو `REFRESH_SECONDS` في `docker-compose.yml` ثم:
 ```bash
 docker compose up -d
 ```
@@ -99,7 +103,9 @@ pnpm build
    `config.json` بجانب `index.html` يحتوي على رابط الشيت:
 
 ```json
-{ "csvProjects": "https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=0", "refreshSeconds": 300 }
+{ "csvProjects": "https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=1001",
+  "csvMilestones": "https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=1002",
+  "refreshSeconds": 300 }
 ```
 
 > ملاحظة: التطبيق ملفات ثابتة فقط — لا يلزم تشغيل Node.js على السيرفر في هذه الطريقة.

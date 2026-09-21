@@ -14,19 +14,35 @@ Admin edits the Google Sheet  ──▶  Browser loads the page  ──▶  fetc
 
 - The sheet is the single source of truth. Edit it, reload the page, the data updates.
 - The sheet URL is a **runtime config value** (`/config.json`), injected into the container
-  from the `SHEET_CSV_PROJECTS` env var at start — so you can point at a different sheet
+  from the `SHEET_CSV_PROJECTS` / `SHEET_CSV_MILESTONES` env vars at start — so you can point
+  at a different sheet
   **without rebuilding**.
 - There is no app-side cache; every load fetches fresh (Google caches published CSVs ~1–2 min).
 
 ## Data source
 
-- **Sheet columns rendered:** `Project Name`, `Project Impact`, `Start Date`, `End Date`,
-  `Project Owner`, `Department`. Keep the header row exactly as-is. Extra columns are ignored
-  until the UI is extended.
+The app reads **two tabs** of the portfolio sheet.
+
+- **`Master Portfolio`** (`gid=1001`) — one row per project, 12 columns:
+  `Project ID`, `Project Name`, `IT Department`, `Strategic Domain`, `Priority`, `Status`,
+  `RAG Health`, `Decision Required`, `Start Date`, `End Date`, `Owner`, `Notes`.
+- **`Milestones`** (`gid=1002`) — many rows per project, joined on `Project ID`:
+  `Project ID`, `Project Name`, `IT Department`, `Milestone Name`, `Due Date`, `Status`.
+  Optional — without it the Timeline simply shows no milestone markers.
+- **`Reference Lists`** (`gid=1003`) defines the allowed values. Put them behind
+  *Data → Data validation* dropdowns so spelling can't drift:
+  `Status` = Not Started / In Progress / On Hold / Completed / Cancelled,
+  `RAG Health` = Red / Amber / Green, `Priority` = High / Medium / Low,
+  `Decision Required` = Yes / No.
+
+Keep each header row exactly as-is — rename one and that field renders as `TBD`.
+Extra columns are ignored.
+
 - **Access:** share the sheet as *Anyone with the link → Viewer* (or *Publish to web → CSV*).
-- **CSV URL** (gviz form): `https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=0`
-- Dates accept `YYYY-MM-DD`, `D-Mon-YYYY` (e.g. `10-Sep-2026`), or `M/D/YYYY`; status
-  (Upcoming / Active / Completed) is derived from the dates automatically.
+- **CSV URL** (gviz form): `https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=<TAB_GID>`
+- Dates accept `YYYY-MM-DD`, `D-Mon-YYYY` (e.g. `10-Sep-2026`), or `M/D/YYYY`.
+- **`Status` and `RAG Health` are read straight from the sheet** — nothing is derived from
+  the dates. The sheet is authoritative.
 
 ## Project structure
 
@@ -59,18 +75,20 @@ The dev server reads the sheet URL from `public/config.json`. To point at a diff
 temporarily, either edit that file or set an env var:
 
 ```sh
-VITE_SHEET_CSV_PROJECTS='https://docs.google.com/.../gviz/tq?tqx=out:csv&gid=0' pnpm dev
+VITE_SHEET_CSV_PROJECTS='https://docs.google.com/.../gviz/tq?tqx=out:csv&gid=1001' \
+  VITE_SHEET_CSV_MILESTONES='https://docs.google.com/.../gviz/tq?tqx=out:csv&gid=1002' pnpm dev
 ```
 
 ## Build & run in Docker (intranet)
 
-Set your sheet URL in `docker-compose.yml` (`SHEET_CSV_PROJECTS`), then:
+Set your sheet URLs in `docker-compose.yml` (`SHEET_CSV_PROJECTS`, `SHEET_CSV_MILESTONES`), then:
 
 ```sh
 docker compose up -d --build      # serves on http://<host>:8080
 ```
 
-To change the sheet or refresh cadence later, edit `SHEET_CSV_PROJECTS` / `REFRESH_SECONDS`
+To change the sheet or refresh cadence later, edit `SHEET_CSV_PROJECTS` /
+`SHEET_CSV_MILESTONES` / `REFRESH_SECONDS`
 in `docker-compose.yml` and run `docker compose up -d` again — **no rebuild needed**.
 
 > `REFRESH_SECONDS` (default 300) makes open tabs re-fetch automatically; set `0` to fetch

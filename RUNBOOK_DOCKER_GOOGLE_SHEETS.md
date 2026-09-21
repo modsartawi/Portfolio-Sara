@@ -14,12 +14,17 @@ fetch, no secrets in the image.
 use the **§7 nginx-proxy fallback** — then only the container needs egress and the sheet URL
 never reaches the client.
 
-> **As built (2026-09-21):** implemented and validated end-to-end. The dashboard was
-> **simplified to the sheet's actual 6 columns** (see §1.1). Docker image builds, the
+> **As built (2026-09-21):** implemented and validated end-to-end. Docker image builds, the
 > container serves on `:8080`, `config.json` is injected from env, and the gviz CSV endpoint
 > returns `200 text/csv` with CORS — so the browser fetches it directly, **no proxy needed**.
 > The as-built code lives in `lib/sheet.ts` (fetch/parse/date-normalize) and `app/page.tsx`
-> (Overview / Projects / Timeline). This is **one tab, one CSV**.
+> (Overview / Projects / Timeline).
+>
+> **Schema change (2026-09-21, later the same day):** the sheet was restructured into four
+> tabs. The app now reads **two CSVs** — `Master Portfolio` (`gid=1001`, 12 columns) and
+> `Milestones` (`gid=1002`) — see §1.1. `gid=0` is now a dashboard built inside the sheet and
+> is **not** a data source. `Status` and `RAG Health` are columns now; nothing is derived
+> from the dates any more.
 
 ---
 
@@ -27,32 +32,46 @@ never reaches the client.
 
 The admin owns the sheet; the app renders whatever is in it on the next page load.
 
-1. Keep the project rows on the first tab (`gid=0`). The **header row must match the field
-   names the UI reads, exactly** (spaces + casing) — see §1.1.
+1. Keep the project rows on the **`Master Portfolio`** tab (`gid=1001`) and milestones on
+   **`Milestones`** (`gid=1002`). The **header row of each must match the field names the UI
+   reads, exactly** (spaces + casing) — see §1.1. `gid=0` is the in-sheet dashboard, not data.
 2. Make it readable one of two ways:
    - **Link sharing** (simplest, what we use): `Share → General access → Anyone with the link
      → Viewer`. Then the CSV URL is
-     `https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=0`.
+     `https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&gid=<TAB_GID>`.
    - **Publish to web:** `File → Share → Publish to web → <tab> → CSV`, giving a
-     `.../pub?gid=0&single=true&output=csv` URL. Either works identically.
-3. That URL is the only config the app needs. **This sheet's URL:**
-   `https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=0`
-   (already set in `docker-compose.yml`). Verified `200 text/csv` with CORS enabled.
+     `.../pub?gid=<TAB_GID>&single=true&output=csv` URL. Either works identically.
+3. Those URLs are the only config the app needs. **This sheet's URLs:**
+   - projects: `https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=1001`
+   - milestones: `https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=1002`
+
+   (both already set in `docker-compose.yml`). Verified `200 text/csv` with CORS enabled.
 
 ### 1.1 Column + formatting contract (the only things that break rendering)
 
-- **Headers** must equal these exactly (the as-built UI reads only these six):
-  `Project Name`, `Project Impact`, `Start Date`, `End Date`, `Project Owner`, `Department`.
-  Rename one and that field silently renders as `TBD`. Add more columns later and they're
-  simply ignored until the UI is extended.
+- **`Master Portfolio` headers** must equal these exactly (12 columns):
+  `Project ID`, `Project Name`, `IT Department`, `Strategic Domain`, `Priority`, `Status`,
+  `RAG Health`, `Decision Required`, `Start Date`, `End Date`, `Owner`, `Notes`.
+- **`Milestones` headers** (6 columns, joined to a project on `Project ID`):
+  `Project ID`, `Project Name`, `IT Department`, `Milestone Name`, `Due Date`, `Status`.
+  A milestone whose `Project ID` matches nothing is simply not shown.
+
+  Rename a header and that field silently renders as `TBD`. Add more columns later and
+  they're simply ignored until the UI is extended.
 - **Dates** (`Start Date`, `End Date`): the parser (`lib/sheet.ts`) accepts `YYYY-MM-DD`,
   `D-Mon-YYYY` (e.g. `10-Sep-2026`), and `M/D/YYYY`, normalizing all to ISO. Empty end dates
   are fine — the project shows as undated / single-quarter on the Timeline.
-- **`Department` / `Project Owner`** drive the Overview grouping and the Projects filters, so
-  keep their spelling consistent (a typo becomes a separate department/owner). A
-  **Data → Data validation** dropdown on those two columns prevents drift.
-- **Status** (Upcoming / Active / Completed) is derived automatically from Start/End vs.
-  today — there's no status column to maintain.
+- **`IT Department` / `Strategic Domain` / `Owner`** drive the Overview breakdowns and the
+  Projects filters, so keep their spelling consistent (a typo becomes a separate row in the
+  breakdown). The `Reference Lists` tab (`gid=1003`) holds the allowed values — put them
+  behind **Data → Data validation** dropdowns so they can't drift.
+- **`Status` and `RAG Health` are read straight from the sheet**, not derived. Allowed values:
+  `Status` = Not Started / In Progress / On Hold / Completed / Cancelled;
+  `RAG Health` = Red / Amber / Green; `Priority` = High / Medium / Low;
+  `Decision Required` = Yes / No. A value outside these renders, but loses its colour.
+- **Overview** mirrors the sheet's own `Dashboard` tab: Total / In Progress / High Priority /
+  Decision Required, breakdowns by department and domain, RAG counts, and an attention list
+  of everything flagged `Red` or `Decision Required = Yes`.
 
 ---
 
@@ -141,7 +160,8 @@ const useA = () => useContext(DataCtx);
 const [A, setA] = useState<P[]>([]);
 useEffect(() => { (async () => {
   const cfg = await fetch("/config.json").then(r => r.json()).catch(() => ({} as any));
-  const url = cfg.csvProjects || (import.meta as any).env?.VITE_SHEET_CSV_PROJECTS;
+  const url  = cfg.csvProjects   || (import.meta as any).env?.VITE_SHEET_CSV_PROJECTS;
+  const murl = cfg.csvMilestones || (import.meta as any).env?.VITE_SHEET_CSV_MILESTONES;
   if (url) { try { setA(await fetchSheet(url) as P[]); } catch (e) { console.error("[sheet]", e); } }
 })(); }, []);
 ```
@@ -167,7 +187,8 @@ real data flows.
 > `app/data.ts` stays only for `logoData` (and as an offline reference). The 95 KB
 > `portfolioData` literal is no longer imported — tree-shaking drops it from the bundle.
 > `config.json` (§4) lets ops change the sheet URL **without rebuilding**; the
-> `VITE_SHEET_CSV_PROJECTS` env var is just a build-time fallback for local `pnpm dev`.
+> `VITE_SHEET_CSV_PROJECTS` / `VITE_SHEET_CSV_MILESTONES` env vars are just build-time
+> fallbacks for local `pnpm dev`.
 
 ---
 
@@ -246,7 +267,7 @@ Sanity-check locally before Docker:
 
 ```sh
 pnpm install
-VITE_SHEET_CSV_PROJECTS='https://docs.google.com/…/pub?gid=0&single=true&output=csv' pnpm dev
+VITE_SHEET_CSV_PROJECTS='https://docs.google.com/…/pub?gid=1001&single=true&output=csv' pnpm dev
 # open http://localhost:5173 — dashboard should fill from the sheet
 ```
 
@@ -308,6 +329,7 @@ if [ -n "${SHEET_CSV_PROJECTS:-}" ]; then
   cat > /usr/share/nginx/html/config.json <<EOF
 {
   "csvProjects": "${SHEET_CSV_PROJECTS}",
+  "csvMilestones": "${SHEET_CSV_MILESTONES:-}",
   "refreshSeconds": ${REFRESH_SECONDS:-300}
 }
 EOF
@@ -331,7 +353,7 @@ services:
     ports:
       - "8080:8080"        # use "127.0.0.1:8080:8080" if a reverse proxy fronts it
     environment:
-      SHEET_CSV_PROJECTS: "https://docs.google.com/spreadsheets/d/e/2PACX-…/pub?gid=0&single=true&output=csv"
+      SHEET_CSV_PROJECTS: "https://docs.google.com/spreadsheets/d/e/2PACX-…/pub?gid=1001&single=true&output=csv"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
       interval: 30s
@@ -407,7 +429,7 @@ Point the app at the proxy path instead of the Google URL. In `docker/40-config.
 
 ```sh
 cat > /usr/share/nginx/html/config.json <<EOF
-{ "csvProjects": "/sheet/spreadsheets/d/e/2PACX-…/pub?gid=0&single=true&output=csv" }
+{ "csvProjects": "/sheet/spreadsheets/d/e/2PACX-…/pub?gid=1001&single=true&output=csv" }
 EOF
 ```
 

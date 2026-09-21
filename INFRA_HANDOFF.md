@@ -44,13 +44,17 @@ Substitute your registry host. To push straight from the build, replace step 1's
 ```sh
 docker pull registry.company.local/it-portfolio-hub:1.0.0
 docker run -d --name portfolio-hub -p 8080:8080 --restart unless-stopped \
-  -e SHEET_CSV_PROJECTS="https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=0" \
+  -e SHEET_CSV_PROJECTS="https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=1001" \
+  -e SHEET_CSV_MILESTONES="https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=1002" \
   -e REFRESH_SECONDS="300" \
   registry.company.local/it-portfolio-hub:1.0.0
 ```
 
-- `SHEET_CSV_PROJECTS` — the data source URL. **Optional:** the image ships with the above
-  URL baked in as default; pass this env only to point at a different sheet (no rebuild needed).
+- `SHEET_CSV_PROJECTS` — the "Master Portfolio" tab as CSV (`gid=1001`), one row per project.
+- `SHEET_CSV_MILESTONES` — the "Milestones" tab as CSV (`gid=1002`); optional, the Timeline
+  just shows no milestone markers without it.
+- Both are **optional**: the image ships with the URLs above baked in as defaults. Pass them
+  only to point at a different sheet (no rebuild needed).
 - `REFRESH_SECONDS` — auto re-fetch interval for open tabs (default 300; `0` = on load only).
 
 Then browse `http://<host>:8080/`.
