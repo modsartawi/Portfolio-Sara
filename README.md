@@ -40,6 +40,8 @@ Admin edits the Google Sheet  ──▶  Browser loads the page  ──▶  fetc
 | `public/config.json` | Dev-time config (sheet URL); overwritten in the container at runtime |
 | `Dockerfile`, `docker/`, `docker-compose.yml` | Multi-stage build → nginx static serving |
 | `RUNBOOK_DOCKER_GOOGLE_SHEETS.md` | Full setup / operations / troubleshooting guide |
+| `INFRA_HANDOFF.md` | Build, push and run the container — hand this to the infra team |
+| `DEPLOYMENT_GUIDE_AR.md` | Arabic deployment guide |
 
 ## Prerequisites
 

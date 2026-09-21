@@ -1,35 +1,79 @@
 # IT Executive Portfolio Hub — Container Handoff
 
-**Artifact:** `it-portfolio-hub-1.0.0.tar.gz` (Docker image, ~20 MB compressed / ~50 MB loaded)
-**Checksum:** see `it-portfolio-hub-1.0.0.tar.gz.sha256`
-**Base image:** `nginx:1.27-alpine` · serves on container port **8080** · no root services, no DB, no secrets.
+**Source:** https://github.com/modsartawi/Portfolio-Sara
+**Base image:** `nginx:1.27-alpine` · serves on container port **8080** · no root services,
+no DB, no secrets.
 
 ## What it is
 A static single-page dashboard (nginx) that reads a **read-only Google Sheet** in the user's
 browser and renders it. No backend, no state, no persistent storage.
 
-## 1. Verify integrity
+## 1. Build the image
+
+The build is fully self-contained — it needs no credentials, and the only network access
+it requires is to the npm registry and Docker Hub.
+
 ```sh
-shasum -a 256 -c it-portfolio-hub-1.0.0.tar.gz.sha256   # expect: OK
+git clone https://github.com/modsartawi/Portfolio-Sara.git
+cd Portfolio-Sara
 ```
 
-## 2. Load the image
+Build for the **target server's** architecture, not the workstation's. Intranet hosts are
+almost always `linux/amd64`; building on an Apple Silicon Mac without `--platform` produces
+an arm64 image that will not start there.
+
 ```sh
-docker load -i it-portfolio-hub-1.0.0.tar.gz            # loads it-portfolio-hub:1.0.0
+docker buildx build --platform linux/amd64 -t it-portfolio-hub:1.0.0 --load .
 ```
 
-## 3. Run
+The Dockerfile is multi-stage: Node builds the static bundle on the builder's native
+architecture (no emulation), and only the compiled files are copied into the nginx image.
+
+## 2. Push to the internal registry
+
 ```sh
+docker tag it-portfolio-hub:1.0.0 registry.company.local/it-portfolio-hub:1.0.0
+docker push registry.company.local/it-portfolio-hub:1.0.0
+```
+
+Substitute your registry host. To push straight from the build, replace step 1's
+`--load` with `--push` and tag the registry path directly in `-t`.
+
+## 3. Run it on the host
+
+```sh
+docker pull registry.company.local/it-portfolio-hub:1.0.0
 docker run -d --name portfolio-hub -p 8080:8080 --restart unless-stopped \
   -e SHEET_CSV_PROJECTS="https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=0" \
   -e REFRESH_SECONDS="300" \
-  it-portfolio-hub:1.0.0
+  registry.company.local/it-portfolio-hub:1.0.0
 ```
+
 - `SHEET_CSV_PROJECTS` — the data source URL. **Optional:** the image ships with the above
   URL baked in as default; pass this env only to point at a different sheet (no rebuild needed).
 - `REFRESH_SECONDS` — auto re-fetch interval for open tabs (default 300; `0` = on load only).
 
 Then browse `http://<host>:8080/`.
+
+### Single-host shortcut
+
+If the server builds and runs the image itself, skip the registry entirely — the repo ships
+a compose file with the env already set:
+
+```sh
+docker compose up -d --build
+```
+
+### Alternative: a prebuilt tarball
+
+If you were handed `it-portfolio-hub-1.0.0.tar.gz` instead of building from source:
+
+```sh
+shasum -a 256 -c it-portfolio-hub-1.0.0.tar.gz.sha256   # expect: OK
+docker load -i it-portfolio-hub-1.0.0.tar.gz            # loads it-portfolio-hub:1.0.0
+```
+
+Then run it as in step 3, using the local `it-portfolio-hub:1.0.0` tag.
 
 ## 4. Verify it's up
 ```sh
