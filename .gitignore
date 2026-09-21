@@ -49,3 +49,6 @@ next-env.d.ts
 /artifacts/
 # Hosting-platform scratch config from a previous toolchain.
 /.openai/
+
+# TypeScript incremental build cache.
+*.tsbuildinfo
