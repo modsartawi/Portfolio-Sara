@@ -1,0 +1,20 @@
+services:
+  portfolio-hub:
+    build: .
+    image: it-portfolio-hub:local
+    container_name: portfolio-hub
+    restart: unless-stopped
+    ports:
+      - "8080:8080"          # use "127.0.0.1:8080:8080" if a reverse proxy fronts it
+    environment:
+      # Published read-only CSV link (File > Share > Publish to web > Projects > CSV).
+      # Change it and `docker compose up -d` — no rebuild needed.
+      SHEET_CSV_PROJECTS: "https://docs.google.com/spreadsheets/d/1iXx4Y9fvqXShd4Wljqqv5Vr61elOSiuZU4w-rTI0nq0/gviz/tq?tqx=out:csv&gid=0"
+      # Re-fetch every N seconds so open tabs update without a manual reload. 0 = only on load.
+      REFRESH_SECONDS: "300"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

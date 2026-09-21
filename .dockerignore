@@ -1,0 +1,13 @@
+node_modules
+dist
+artifacts
+.next
+.vinext
+.wrangler
+.sites-runtime
+.git
+*.log
+.env
+.env.*
+RUNBOOK_DOCKER_GOOGLE_SHEETS.md
+DEPLOYMENT_GUIDE_AR.md
