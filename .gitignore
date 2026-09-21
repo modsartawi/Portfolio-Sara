@@ -45,8 +45,7 @@ next-env.d.ts
 /outputs/
 /work/
 
-# Build outputs: 41 MB of Docker image tarballs, reproducible from the Dockerfile.
-/artifacts/*.tar.gz
-/artifacts/*.sha256
+# Build outputs: Docker image tarballs and handoff notes, reproducible locally.
+/artifacts/
 # Hosting-platform scratch config from a previous toolchain.
 /.openai/
